@@ -223,34 +223,45 @@ public class ContactsManager extends ReactContextBaseJavaModule implements Activ
         // this method is only needed for iOS
     }
 
-    /*
-    protected static void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-            @NonNull int[] grantResults) {
-        if (requestPromise == null) {
-            return;
-        }
-
-        if (requestCode != PERMISSION_REQUEST_CODE) {
-            requestPromise.resolve(PERMISSION_DENIED);
-            return;
-        }
-
-        Hashtable<String, Boolean> results = new Hashtable<>();
-        for (int i = 0; i < permissions.length; i++) {
-            results.put(permissions[i], grantResults[i] == PackageManager.PERMISSION_GRANTED);
-        }
-
-        if (results.containsKey(PERMISSION_READ_CONTACTS) && results.get(PERMISSION_READ_CONTACTS)) {
-            requestPromise.resolve(PERMISSION_AUTHORIZED);
-        } else {
-            requestPromise.resolve(PERMISSION_DENIED);
-        }
-
-        requestPromise = null;
+    @ReactMethod
+    public void getGroups(Promise promise) {
+        contactsManagerImpl.getGroups(promise);
     }
 
-     */
+    @ReactMethod
+    public void getGroup(String identifier, Promise promise) {
+        contactsManagerImpl.getGroup(identifier, promise);
+    }
 
+    @ReactMethod
+    public void deleteGroup(String identifier, Promise promise) {
+        contactsManagerImpl.deleteGroup(identifier, promise);
+    }
+
+    @ReactMethod
+    public void updateGroup(String identifier, ReadableMap groupData, Promise promise) {
+        contactsManagerImpl.updateGroup(identifier, groupData, promise);
+    }
+
+    @ReactMethod
+    public void addGroup(ReadableMap group, Promise promise) {
+        contactsManagerImpl.addGroup(group, promise);
+    }
+
+    @ReactMethod
+    public void contactsInGroup(String identifier, Promise promise) {
+        contactsManagerImpl.contactsInGroup(identifier, promise);
+    }
+
+    @ReactMethod
+    public void addContactsToGroup(String groupIdentifier, ReadableArray contactIdentifiers, Promise promise) {
+        contactsManagerImpl.addContactsToGroup(groupIdentifier, contactIdentifiers, promise);
+    }
+
+    @ReactMethod
+    public void removeContactsFromGroup(String groupIdentifier, ReadableArray contactIdentifiers, Promise promise) {
+        contactsManagerImpl.removeContactsFromGroup(groupIdentifier, contactIdentifiers, promise);
+    }
 
     @Override
     public String getName() {

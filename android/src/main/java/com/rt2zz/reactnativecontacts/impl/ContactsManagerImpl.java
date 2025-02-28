@@ -1192,6 +1192,10 @@ public class ContactsManagerImpl {
         return (res == PackageManager.PERMISSION_GRANTED) ? PERMISSION_AUTHORIZED : PERMISSION_DENIED;
     }
 
+    private boolean hasPermission(String permission) {
+        return ActivityCompat.checkSelfPermission(getReactApplicationContext(), permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
     /*
      * TODO support all phone types
      * http://developer.android.com/reference/android/provider/ContactsContract.
@@ -1286,6 +1290,265 @@ public class ContactsManagerImpl {
         return postalAddressType;
     }
 
+    public void removeContactsFromGroup(String groupIdentifier, ReadableArray contactIdentifiers, Promise promise) {
+        if (!hasPermission(Manifest.permission.WRITE_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to write contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+        ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+
+        try {
+            for (int i = 0; i < contactIdentifiers.size(); i++) {
+                String contactId = contactIdentifiers.getString(i);
+                ops.add(ContentProviderOperation.newDelete(ContactsContract.Data.CONTENT_URI)
+                        .withSelection(
+                            ContactsContract.Data.MIMETYPE + "=? AND " +
+                            ContactsContract.Data.RAW_CONTACT_ID + "=? AND " +
+                            ContactsContract.Data.DATA1 + "=?",
+                            new String[]{
+                                ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE,
+                                contactId,
+                                groupIdentifier
+                            })
+                        .build());
+            }
+
+            contentResolver.applyBatch(ContactsContract.AUTHORITY, ops);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("E_REMOVE_CONTACTS_FROM_GROUP", e.getMessage());
+        }
+    }
+
+    public void getGroups(Promise promise) {
+        if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to read contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+        WritableArray groups = Arguments.createArray();
+
+        try {
+            String[] projection = new String[] {
+                ContactsContract.Groups._ID,
+                ContactsContract.Groups.TITLE
+            };
+
+            Cursor cursor = contentResolver.query(
+                ContactsContract.Groups.CONTENT_URI,
+                projection,
+                null,
+                null,
+                null
+            );
+
+            if (cursor != null) {
+                try {
+                    while (cursor.moveToNext()) {
+                        WritableMap group = Arguments.createMap();
+                        group.putString("identifier", cursor.getString(0));
+                        group.putString("name", cursor.getString(1));
+                        groups.pushMap(group);
+                    }
+                } finally {
+                    cursor.close();
+                }
+            }
+
+            promise.resolve(groups);
+        } catch (Exception e) {
+            promise.reject("E_GET_GROUPS", e.getMessage());
+        }
+    }
+
+    public void getGroup(String identifier, Promise promise) {
+        if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to read contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+
+        try {
+            String[] projection = new String[] {
+                ContactsContract.Groups._ID,
+                ContactsContract.Groups.TITLE
+            };
+
+            Cursor cursor = contentResolver.query(
+                ContactsContract.Groups.CONTENT_URI,
+                projection,
+                ContactsContract.Groups._ID + "=?",
+                new String[] { identifier },
+                null
+            );
+
+            WritableMap group = null;
+            if (cursor != null) {
+                try {
+                    if (cursor.moveToFirst()) {
+                        group = Arguments.createMap();
+                        group.putString("identifier", cursor.getString(0));
+                        group.putString("name", cursor.getString(1));
+                    }
+                } finally {
+                    cursor.close();
+                }
+            }
+
+            promise.resolve(group);
+        } catch (Exception e) {
+            promise.reject("E_GET_GROUP", e.getMessage());
+        }
+    }
+
+    public void deleteGroup(String identifier, Promise promise) {
+        if (!hasPermission(Manifest.permission.WRITE_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to write contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+
+        try {
+            int deleted = contentResolver.delete(
+                ContactsContract.Groups.CONTENT_URI,
+                ContactsContract.Groups._ID + "=?",
+                new String[] { identifier }
+            );
+            promise.resolve(deleted > 0);
+        } catch (Exception e) {
+            promise.reject("E_DELETE_GROUP", e.getMessage());
+        }
+    }
+
+    public void updateGroup(String identifier, ReadableMap groupData, Promise promise) {
+        if (!hasPermission(Manifest.permission.WRITE_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to write contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+
+        try {
+            ContentValues values = new ContentValues();
+            if (groupData.hasKey("name")) {
+                values.put(ContactsContract.Groups.TITLE, groupData.getString("name"));
+            }
+
+            int updated = contentResolver.update(
+                ContactsContract.Groups.CONTENT_URI,
+                values,
+                ContactsContract.Groups._ID + "=?",
+                new String[] { identifier }
+            );
+
+            if (updated > 0) {
+                getGroup(identifier, promise);
+            } else {
+                promise.reject("E_UPDATE_GROUP", "Failed to update group");
+            }
+        } catch (Exception e) {
+            promise.reject("E_UPDATE_GROUP", e.getMessage());
+        }
+    }
+
+    public void addGroup(ReadableMap group, Promise promise) {
+        if (!hasPermission(Manifest.permission.WRITE_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to write contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+
+        try {
+            ContentValues values = new ContentValues();
+            values.put(ContactsContract.Groups.TITLE, group.getString("name"));
+            values.put(ContactsContract.Groups.GROUP_VISIBLE, 1);
+
+            Uri groupUri = contentResolver.insert(ContactsContract.Groups.CONTENT_URI, values);
+            String groupId = groupUri.getLastPathSegment();
+
+            getGroup(groupId, promise);
+        } catch (Exception e) {
+            promise.reject("E_ADD_GROUP", e.getMessage());
+        }
+    }
+
+    public void contactsInGroup(String identifier, Promise promise) {
+        if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to read contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+        WritableArray contacts = Arguments.createArray();
+
+        try {
+            String[] projection = new String[] {
+                ContactsContract.Data.CONTACT_ID
+            };
+
+            Cursor cursor = contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                projection,
+                ContactsContract.CommonDataKinds.GroupMembership.GROUP_ROW_ID + "=? AND "
+                + ContactsContract.CommonDataKinds.GroupMembership.MIMETYPE + "=?",
+                new String[] {
+                    identifier,
+                    ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE
+                },
+                null
+            );
+
+            if (cursor != null) {
+                try {
+                    while (cursor.moveToNext()) {
+                        String contactId = cursor.getString(0);
+                        Contact contact = getContactById(contactId);
+                        if (contact != null) {
+                            contacts.pushMap(contact.toMap());
+                        }
+                    }
+                } finally {
+                    cursor.close();
+                }
+            }
+
+            promise.resolve(contacts);
+        } catch (Exception e) {
+            promise.reject("E_CONTACTS_IN_GROUP", e.getMessage());
+        }
+    }
+
+    public void addContactsToGroup(String groupIdentifier, ReadableArray contactIdentifiers, Promise promise) {
+        if (!hasPermission(Manifest.permission.WRITE_CONTACTS)) {
+            promise.reject("E_PERM", "No permission to write contacts");
+            return;
+        }
+
+        ContentResolver contentResolver = getReactApplicationContext().getContentResolver();
+        ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+
+        try {
+            for (int i = 0; i < contactIdentifiers.size(); i++) {
+                String contactId = contactIdentifiers.getString(i);
+                ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                        .withValue(ContactsContract.Data.RAW_CONTACT_ID, contactId)
+                        .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE)
+                        .withValue(ContactsContract.Data.DATA1, groupIdentifier)
+                        .build());
+            }
+
+            contentResolver.applyBatch(ContactsContract.AUTHORITY, ops);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("E_ADD_CONTACTS_TO_GROUP", e.getMessage());
+        }
+    }
 
     public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent data) {
         if (requestCode != REQUEST_OPEN_CONTACT_FORM && requestCode != REQUEST_OPEN_EXISTING_CONTACT) {
@@ -1328,7 +1591,6 @@ public class ContactsManagerImpl {
         }
         updateContactPromise = null;
     }
-
 
     public void onNewIntent(Intent intent) {
     }
