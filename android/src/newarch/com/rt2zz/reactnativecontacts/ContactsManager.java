@@ -10,6 +10,7 @@ import android.graphics.BitmapFactory;
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.rt2zz.reactnativecontacts.impl.ContactsManagerImpl;
 
@@ -222,6 +223,10 @@ public class ContactsManager extends NativeContactsSpec implements ActivityEvent
         // this method is only needed for iOS
     }
 
+    @Override
+    public void removeContactsFromGroup(String groupIdentifier, ReadableArray contactIdentifiers, Promise promise) {
+        contactsManagerImpl.removeContactsFromGroup(groupIdentifier, contactIdentifiers, promise);
+    }
 
     /*
     protected static void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
